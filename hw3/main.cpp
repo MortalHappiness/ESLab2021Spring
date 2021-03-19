@@ -41,9 +41,6 @@ SpwfSAInterface wifi(MBED_CONF_APP_WIFI_TX, MBED_CONF_APP_WIFI_RX);
 
 #endif
 
-static BufferedSerial serial_port(USBTX, USBRX);
-FileHandle *mbed::mbed_override_console(int fd) { return &serial_port; }
-
 const char *sec2str(nsapi_security_t sec) {
     switch (sec) {
         case NSAPI_SECURITY_NONE:
@@ -95,7 +92,20 @@ void sensor_reading(NetworkInterface *net) {
     nsapi_error_t response;
 
     int sample_num = 0;
+    float sensor_value = 0;
     int16_t pDataXYZ[3] = {0};
+    float pGyroDataXYZ[3] = {0};
+
+    printf("Start sensor init\n");
+
+    BSP_TSENSOR_Init();
+    BSP_HSENSOR_Init();
+    BSP_PSENSOR_Init();
+
+    BSP_MAGNETO_Init();
+    BSP_GYRO_Init();
+    BSP_ACCELERO_Init();
+
     char acc_json[1024];
 
     SocketAddress a;
@@ -103,20 +113,17 @@ void sensor_reading(NetworkInterface *net) {
     printf("IP address: %s\n",
            a.get_ip_address() ? a.get_ip_address() : "None");
     socket.open(net);
-    net->gethostbyname("linux1.csie.ntu.edu.tw", &a);
+    net->gethostbyname("140.112.30.32", &a);
     a.set_port(54321);
     response = socket.connect(a);
+    printf("connected");
 
     while (1) {
         ++sample_num;
         BSP_ACCELERO_AccGetXYZ(pDataXYZ);
-        float x = pDataXYZ[0] * SCALE_MULTIPLIER;
-        float y = pDataXYZ[1] * SCALE_MULTIPLIER;
-        float z = pDataXYZ[2] * SCALE_MULTIPLIER;
-        int len = sprintf(acc_json, "{\"x\":%f,\"y\":%f,\"z\":%f,\"s\":%d}",
-                          (float)((int)(x * 10000) / 10000),
-                          (float)((int)(y * 10000) / 10000),
-                          (float)((int)(z * 10000) / 10000), sample_num);
+        int len = sprintf(acc_json, "{\"x\":%d,\"y\":%d,\"z\":%d,\"s\":%d}",
+                          pDataXYZ[0], pDataXYZ[1], pDataXYZ[2], sample_num);
+        printf("%s\n", acc_json);
         response = socket.send(acc_json, len);
         if (response < 0) {
             printf("Error sending: %d\n", response);
@@ -125,16 +132,21 @@ void sensor_reading(NetworkInterface *net) {
     }
 }
 
+static BufferedSerial serial_port(USBTX, USBRX);
+FileHandle *mbed::mbed_override_console(int fd) { return &serial_port; }
+
 int main() {
     int count = 0;
 
     printf("WiFi example\n\n");
 
+    /*
     count = scan_demo(&wifi);
     if (count == 0) {
         printf("No WIFI APNs found - can't continue further.\n");
         return -1;
     }
+    */
 
     printf("\nConnecting to %s...\n", MBED_CONF_APP_WIFI_SSID);
     int ret = wifi.connect(MBED_CONF_APP_WIFI_SSID, MBED_CONF_APP_WIFI_PASSWORD,
